@@ -361,6 +361,17 @@ void		*p = (void *)input_record;
 				output_record->received = v.val.val64;
 				p = (void *)tpl->data;
 			} break;
+			case EX_HTTP: {
+				tpl_ext_50_t *tpl = (tpl_ext_50_t *)p;
+				int size = sizeof(output_record->HTTP_method);
+				memcpy((void *)output_record->HTTP_method, (void *)tpl->method, size);
+				size = sizeof(output_record->HTTP_host);
+				memcpy((void *)output_record->HTTP_host, (void *)tpl->host, size);
+				size = sizeof(output_record->HTTP_target);
+				memcpy((void *)output_record->HTTP_target, (void *)tpl->target, size);
+				p = (void *)tpl->data;
+			} break;
+
 #ifdef NSEL
 			case EX_NSEL_COMMON: {
 				tpl_ext_37_t *tpl = (tpl_ext_37_t *)p;

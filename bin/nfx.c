@@ -133,6 +133,9 @@ extension_descriptor_t extension_descriptor[] = {
 	{ EX_PORT_BLOCK_ALLOC, 	8,	32, 0,    	"NAT Port Block Allocation"},
 	{ EX_NEL_RESERVED_1,	0,	0, 0,		NULL},
 
+        // HTTP method, host and URL
+        { EX_HTTP,               104,    33, 0,  "HTTP"},
+
 	// last entry
 	{ 0,	0,	0, 0,	NULL }
 };

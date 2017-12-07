@@ -174,7 +174,11 @@ server			{ return SERVER; }
 app				{ return APP; }
 latency			{ return LATENCY; }
 sysid			{ return SYSID; }
- 
+
+hhost                   { return H_HOST; }
+hmethod                 { return H_METHOD; }
+htarget                 { return H_TARGET; }
+
 asa				{ return ASA; 		/* NSEL filter */ }
 event			{ return EVENT; 	/* NEL/NSEL filter */ }
 ignore|invalid|create|add|term|delete|deny	{ 	/* NSEL filter */

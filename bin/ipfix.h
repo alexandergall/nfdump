@@ -260,6 +260,11 @@ typedef struct ipfix_template_elements_e_s {
 #define IPFIX_bgpPrevAdjacentAsNumber                   129
 #define IPFIX_flowStartMilliseconds			152
 #define IPFIX_flowEndMilliseconds			153
+
+#define IPFIX_httpRequestMethod                         459
+#define IPFIX_httpRequestHost                           460
+#define IPFIX_httpRequestTarget                         461
+
 // reserved 89
 
 // Enterprise-specific information elements encoded as a 64-bit value.

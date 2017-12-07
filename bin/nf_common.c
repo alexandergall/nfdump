@@ -53,6 +53,8 @@
 #include "nf_common.h"
 #include "util.h"
 
+#define MIN(a,b) (((a)<(b))?(a):(b))
+
 typedef void (*string_function_t)(master_record_t *, char *);
 
 static struct token_list_s {
@@ -224,6 +226,12 @@ static void String_bpp(master_record_t *r, char *string);
 
 static void String_ExpSysID(master_record_t *r, char *string);
 
+static void String_HttpMethod(master_record_t *r, char *string);
+
+static void String_HttpHost(master_record_t *r, char *string);
+
+static void String_HttpTarget(master_record_t *r, char *string);
+
 #ifdef NSEL
 static void String_EventTime(master_record_t *r, char *string);
 
@@ -340,6 +348,11 @@ static struct format_token_list_s {
 	{ "%pps", 0, "     pps", 			 	String_pps },			// pps - packets per second
 	{ "%bpp", 0, "   Bpp", 				 	String_bpp },			// bpp - Bytes per package
 	{ "%eng", 0, " engine", 			 	String_Engine },		// Engine Type/ID
+
+        // HTTP
+	{ "%hmethod", 0,  "Method ", String_HttpMethod },
+	{ "%hhost", 0, "Host                           ", String_HttpHost },
+	{ "%htarget", 0,  "URL                                                            ", String_HttpTarget },
 
 #ifdef NSEL
 // NSEL specifics
@@ -1198,6 +1211,18 @@ extension_map_t	*extension_map = r->map_ref;
 				slen = STRINGSIZE - _slen;
 				break;
 #endif
+                        case EX_HTTP:
+                                snprintf(_s, slen-1,
+"  HTTP Method  =  %s\n"
+"  HTTP host    =  %s\n"
+"  HTTP URL     =  %s\n"
+, r->HTTP_method[0] ? r->HTTP_method : " <empty>",
+  r->HTTP_host[0] ? r->HTTP_host : " <empty>",
+  r->HTTP_target[0] ? r->HTTP_target : " <empty>");
+                                _slen = strlen(data_string);
+                                _s = data_string + _slen;
+                                slen = STRINGSIZE - _slen;
+                                break;
 			default:
 				snprintf(_s, slen-1, "Type %u not implemented\n", id);
 
@@ -2625,6 +2650,28 @@ static void String_ExpSysID(master_record_t *r, char *string) {
 	string[MAX_STRING_LENGTH-1] = '\0';
 
 } // End of String_ExpSysID
+
+static void string_generic(char *src, char* dst, int size) {
+	size = MIN(size, MAX_STRING_LENGTH);
+        char format[16];
+        snprintf(format, sizeof(format), "%%-%ds", size);
+	if ( src[0] == '\0' )
+		snprintf(dst, size , format, "<empty>");
+	else
+                snprintf(dst, size, format, src);
+}
+
+static void String_HttpMethod(master_record_t *r, char *string) {
+        string_generic(r->HTTP_method, string, sizeof(r->HTTP_method));
+}
+
+static void String_HttpHost(master_record_t *r, char *string) {
+        string_generic(r->HTTP_host, string, sizeof(r->HTTP_host));
+}
+
+static void String_HttpTarget(master_record_t *r, char *string) {
+        string_generic(r->HTTP_target, string, sizeof(r->HTTP_target));
+}
 
 #ifdef NSEL
 static void String_nfc(master_record_t *r, char *string) {

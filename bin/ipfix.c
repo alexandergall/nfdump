@@ -271,6 +271,9 @@ static struct ipfix_element_map_s {
 	{ IPFIX_flowEndMilliseconds, 		 _8bytes,   _8bytes,  Time64Mili, zero32, COMMON_BLOCK},
 	{ IPFIX_bgpNextAdjacentAsNumber,         _4bytes,  _4bytes, move32, zero32, EX_BGPADJ },
 	{ IPFIX_bgpPrevAdjacentAsNumber,         _4bytes,  _4bytes, move32, zero32, EX_BGPADJ },
+	{ IPFIX_httpRequestMethod,                     8,         8, move_array, zero8, EX_HTTP },
+	{ IPFIX_httpRequestHost, 	              32,        32, move_array, zero8, EX_HTTP },
+	{ IPFIX_httpRequestTarget, 	              64,        64, move_array, zero8, EX_HTTP },
 
 	{0, 0, 0}
 };
@@ -889,6 +892,10 @@ size_t				size_required;
 				PushSequence( table, IPFIX_bgpNextAdjacentAsNumber, &offset, NULL);
 				PushSequence( table, IPFIX_bgpPrevAdjacentAsNumber, &offset, NULL);
 				break;
+                        case EX_HTTP:
+				PushSequence( table, IPFIX_httpRequestMethod, &offset, NULL);
+				PushSequence( table, IPFIX_httpRequestHost, &offset, NULL);
+				PushSequence( table, IPFIX_httpRequestTarget, &offset, NULL);
 		}
 		extension_map->size += sizeof(uint16_t);
 		extension_map->extension_size += extension_descriptor[map_index].size;

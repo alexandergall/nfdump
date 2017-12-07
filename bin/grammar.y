@@ -43,6 +43,7 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <ctype.h>
+#include <regex.h>
 
 #ifdef HAVE_STDINT_H
 #include <stdint.h>
@@ -104,6 +105,7 @@ char yyerror_buff[256];
 %token ASA REASON DENIED XEVENT XIP XNET XPORT INGRESS EGRESS ACL ACE XACE
 %token NAT ADD EVENT VRF NPORT NIP
 %token PBLOCK START END STEP SIZE QUOTED_STRING
+%token H_HOST H_METHOD H_TARGET
 %type <value>	expr NUMBER PORTNUM ICMP_TYPE ICMP_CODE
 %type <s> STRING REASON QUOTED_STRING
 %type <param> dqual term comp acl inout
@@ -1807,6 +1809,38 @@ term:	ANY { /* this is an unconditionally true expression, as a filter applies i
 
 	}
 
+	| H_HOST QUOTED_STRING {
+		static regex_t regex;
+		int result;
+		if ( (result = regcomp(&regex, $2, REG_EXTENDED|REG_ICASE|REG_NOSUB)) != 0) {
+			yyerror("Invalid regular expression");
+			YYABORT;
+		}
+		$$.self = NewBlock(OffsetHTTPhost, 0,
+				   (uint64_t)&regex, CMP_REGEX, FUNC_NONE, NULL);
+	}
+
+	| H_METHOD QUOTED_STRING {
+		static regex_t regex;
+		int result;
+		if ( (result = regcomp(&regex, $2, REG_EXTENDED|REG_ICASE|REG_NOSUB)) != 0) {
+			yyerror("Invalid regular expression");
+			YYABORT;
+		}
+		$$.self = NewBlock(OffsetHTTPmethod, 0,
+				   (uint64_t)&regex, CMP_REGEX, FUNC_NONE, NULL);
+	}
+
+	| H_TARGET QUOTED_STRING {
+		static regex_t regex;
+		int result;
+		if ( (result = regcomp(&regex, $2, REG_EXTENDED|REG_ICASE|REG_NOSUB)) != 0) {
+			yyerror("Invalid regular expression");
+			YYABORT;
+		}
+		$$.self = NewBlock(OffsetHTTPtarget, 0,
+				   (uint64_t)&regex, CMP_REGEX, FUNC_NONE, NULL);
+	}
 /* iplist definition */
 iplist:	STRING	{ 
 		int i, af, bytes, ret;
