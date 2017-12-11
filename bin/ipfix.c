@@ -197,7 +197,7 @@ typedef struct exporter_ipfix_domain_s {
 
 
 static struct ipfix_element_map_s {
-	uint16_t	id;			// IPFIX element id 
+	uint64_t	id;		    // Combined PEN/IPFIX element id 
 	uint16_t	length;		// type of this element ( input length )
 	uint16_t	out_length;	// type of this element ( output length )
 	uint32_t	sequence;	// 
@@ -269,6 +269,12 @@ static struct ipfix_element_map_s {
 	{0, 0, 0}
 };
 
+// List of Privat Enterprise Numbers derived from ipfix_element_map.
+// Each PEN has its own slot in the lookup_info list of the cache.
+// Avalue of 0xFFFFFFFF indicates the end of the list.
+#define MAX_PENS 256
+static uint32_t PENS[MAX_PENS];
+
 // cache to be used while parsing a template
 static struct cache_s {
 	struct element_param_s {
@@ -276,7 +282,7 @@ static struct cache_s {
 		uint16_t found;
 		uint16_t offset;
 		uint16_t length;
-	}			*lookup_info;
+	}               *lookup_info[MAX_PENS];
 	uint32_t	max_ipfix_elements;
 	uint32_t	*common_extensions;
 
@@ -293,6 +299,8 @@ extern uint32_t overwrite_sampling;
 extern uint32_t	exporter_sysid;
 
 // prototypes
+static uint16_t PEN_to_index(uint32_t PEN);
+
 static input_translation_t *add_translation_table(exporter_ipfix_domain_t *exporter, uint16_t id);
 
 static void remove_translation_table(FlowSource_t *fs, exporter_ipfix_domain_t *exporter, uint16_t id);
@@ -301,9 +309,13 @@ static void remove_all_translation_tables(exporter_ipfix_domain_t *exporter);
 
 static inline exporter_ipfix_domain_t *GetExporter(FlowSource_t *fs, ipfix_header_t *ipfix_header);
 
-static inline uint32_t MapElement(uint16_t Type, uint16_t Length, uint16_t Offset);
+static inline uint16_t PEN_to_index(uint32_t PEN);
 
-static inline void PushSequence(input_translation_t *table, uint16_t Type, uint32_t *offset, void *stack);
+static inline struct element_param_s *get_lookup_info(uint64_t eid);
+
+static inline uint32_t MapElement(uint64_t eid, uint16_t Length, uint16_t Offset);
+
+static inline void PushSequence(input_translation_t *table, uint64_t eid, uint32_t *offset, void *stack);
 
 static inline void Process_ipfix_templates(exporter_ipfix_domain_t *exporter, void *flowset_header, uint32_t size_left, FlowSource_t *fs);
 
@@ -318,20 +330,41 @@ static inline void Process_ipfix_template_withdraw(exporter_ipfix_domain_t *expo
 int Init_IPFIX(void) {
 int i;
 
-	cache.lookup_info	    = (struct element_param_s *)calloc(65536, sizeof(struct element_param_s));
 	cache.common_extensions = (uint32_t *)malloc((Max_num_extensions+1)*sizeof(uint32_t));
-	if ( !cache.common_extensions || !cache.lookup_info ) {
+	if ( !cache.common_extensions ) {
 		LogError("Process_ipfix: Panic! malloc(): %s line %d: %s", __FILE__, __LINE__, strerror (errno));
 		return 0;
 	}
 
 	// init the helper element table
+	memset(&PENS, 0xFF, sizeof(PENS));
 	for (i=1; ipfix_element_map[i].id != 0; i++ ) {
-		uint32_t Type = ipfix_element_map[i].id;
+		uint64_t eid = ipfix_element_map[i].id;
+		uint32_t PEN = PEN_FROM_EID(eid);
+		uint16_t Type = ID_FROM_EID(eid);
+		int k;
+		for (k=0; k < MAX_PENS; k++) {
+			if (PENS[k] == 0xFFFFFFFF) {
+				dbg_printf("Registering new PEN %u\n", PEN);
+				PENS[k] = PEN;
+				cache.lookup_info[k] = (struct element_param_s *)
+					calloc(65536, sizeof(struct element_param_s));
+				if (cache.lookup_info[k] == NULL) {
+					LogError("Process_ipfix: Panic! malloc(): %s line %d: %s", __FILE__, __LINE__, strerror (errno));
+					return 0;
+				}
+				break;
+			} else if (PENS[k] == PEN)
+				break;
+		}
+		if (k == MAX_PENS) {
+			LogError("PEN limit reached (%d)\n", MAX_PENS);
+			return 0;
+		}
 		// multiple same type - save first index only
 		// iterate through same Types afterwards
-		if ( cache.lookup_info[Type].index == 0 ) 
-			cache.lookup_info[Type].index  = i;
+		if ( cache.lookup_info[k][Type].index == 0 ) 
+			cache.lookup_info[k][Type].index  = i;
 	}
 	cache.max_ipfix_elements = i;
 
@@ -399,26 +432,48 @@ uint32_t ObservationDomain = ntohl(ipfix_header->ObservationDomain);
 
 } // End of GetExporter
 
-static inline uint32_t MapElement(uint16_t Type, uint16_t Length, uint16_t Offset) {
-int	index;
+static inline uint16_t PEN_to_index(uint32_t PEN) {
+	int i;
+	for(i=0; i < MAX_PENS; i++) {
+		if ( PENS[i] == PEN )
+			return i;
+	}
+	return 0xFFFF;
+}
 
-	index = cache.lookup_info[Type].index;
-	if ( index ) {
-		while ( index && ipfix_element_map[index].id == Type ) {
-			if ( Length == ipfix_element_map[index].length ) {
-				cache.lookup_info[Type].found  = 1;
-				cache.lookup_info[Type].offset = Offset;
-				cache.lookup_info[Type].length = Length;
-				cache.lookup_info[Type].index  = index;
-				dbg_printf("found extension %u for type: %u, input length: %u output length: %u Extension: %u\n", 
-					ipfix_element_map[index].extension, ipfix_element_map[index].id, 
-					ipfix_element_map[index].length, ipfix_element_map[index].out_length, ipfix_element_map[index].extension);
-				return ipfix_element_map[index].extension;
+static inline struct element_param_s *get_lookup_info(uint64_t eid) {
+uint32_t PEN = PEN_FROM_EID(eid);
+uint16_t Type = ID_FROM_EID(eid), pidx;
+
+	if ( (pidx = PEN_to_index(PEN)) == 0xFFFF )
+		return NULL;
+	return &cache.lookup_info[pidx][Type];
+}
+
+static inline uint32_t MapElement(uint64_t eid, uint16_t Length, uint16_t Offset) {
+int	index;
+struct element_param_s *lookup_info = get_lookup_info(eid);
+
+	if ( lookup_info != NULL ) {
+		index = lookup_info->index;
+		if ( index ) {
+			while ( index && ipfix_element_map[index].id == eid ) {
+				if ( Length == ipfix_element_map[index].length ) {
+					lookup_info->found  = 1;
+					lookup_info->offset = Offset;
+					lookup_info->length = Length;
+					lookup_info->index  = index;
+					dbg_printf("found extension %u for type: %u, PEN: %u, input length: %u output length: %u Extension: %u\n", 
+						   ipfix_element_map[index].extension, ID_FROM_EID(ipfix_element_map[index].id),
+						   PEN_FROM_EID(ipfix_element_map[index].id),
+						   ipfix_element_map[index].length, ipfix_element_map[index].out_length, ipfix_element_map[index].extension);
+					return ipfix_element_map[index].extension;
+				}
+				index++;
 			}
-			index++;
 		}
 	}
-	dbg_printf("Skip unknown element type: %u, Length: %u\n", Type, Length);
+	dbg_printf("Skip unknown element type: %u, PEN: %u, Length: %u\n", ID_FROM_EID(eid), PEN_FROM_EID(eid), Length);
 
 	return 0;
 
@@ -542,9 +597,10 @@ input_translation_t *table, *next;
 
 } // End of remove_all_translation_tables
 
-static inline void PushSequence(input_translation_t *table, uint16_t Type, uint32_t *offset, void *stack) {
+static inline void PushSequence(input_translation_t *table, uint64_t eid, uint32_t *offset, void *stack) {
 uint32_t i = table->number_of_sequences;
-uint32_t index = cache.lookup_info[Type].index;
+struct element_param_s *lookup_info = get_lookup_info(eid);
+uint32_t index = lookup_info->index;
 
 	if ( table->number_of_sequences >= cache.max_ipfix_elements ) {
 		LogError("Process_ipfix: Software bug! Sequence table full. at %s line %d", 
@@ -554,19 +610,19 @@ uint32_t index = cache.lookup_info[Type].index;
 		return;
 	}
 
-	if ( cache.lookup_info[Type].found ) {
-			table->sequence[i].id = ipfix_element_map[index].sequence;
-			table->sequence[i].input_offset  = cache.lookup_info[Type].offset;
-			table->sequence[i].output_offset = *offset;
-			table->sequence[i].stack = stack;
+	if ( lookup_info != NULL && lookup_info->found ) {
+		table->sequence[i].id = ipfix_element_map[index].sequence;
+		table->sequence[i].input_offset  = lookup_info->offset;
+		table->sequence[i].output_offset = *offset;
+		table->sequence[i].stack = stack;
 	} else {
-			table->sequence[i].id = ipfix_element_map[index].zero_sequence;
-			table->sequence[i].input_offset  = 0;
-			table->sequence[i].output_offset = *offset;
-			table->sequence[i].stack = NULL;
+		table->sequence[i].id = ipfix_element_map[index].zero_sequence;
+		table->sequence[i].input_offset  = 0;
+		table->sequence[i].output_offset = *offset;
+		table->sequence[i].stack = NULL;
 	}
-	dbg_printf("Push: sequence: %u, Type: %u, length: %u, out length: %u, id: %u, in offset: %u, out offset: %u\n",
-		i, Type, ipfix_element_map[index].length, ipfix_element_map[index].out_length, table->sequence[i].id, 
+	dbg_printf("Push: sequence: %u, Type: %u, PEN: %u, length: %u, out length: %u, id: %u, in offset: %u, out offset: %u\n",
+		   i, ID_FROM_EID(eid), PEN_FROM_EID(eid), ipfix_element_map[index].length, ipfix_element_map[index].out_length, table->sequence[i].id, 
 		table->sequence[i].input_offset, table->sequence[i].output_offset);
 	table->number_of_sequences++;
 	(*offset) += ipfix_element_map[index].out_length;
@@ -670,11 +726,11 @@ size_t				size_required;
 	 * This record is expected in the output stream. If not available
 	 * in the template, assume empty v4 address.
 	 */
-	if ( cache.lookup_info[IPFIX_SourceIPv4Address].found ) {
+	if ( get_lookup_info(IPFIX_SourceIPv4Address)->found ) {
 		// IPv4 addresses 
 		PushSequence( table, IPFIX_SourceIPv4Address, &offset, NULL);
 		PushSequence( table, IPFIX_DestinationIPv4Address, &offset, NULL);
-	} else if ( cache.lookup_info[IPFIX_SourceIPv6Address].found ) {
+	} else if ( get_lookup_info(IPFIX_SourceIPv6Address)->found ) {
 		// IPv6 addresses 
 		PushSequence( table, IPFIX_SourceIPv6Address, &offset, NULL);
 		PushSequence( table, IPFIX_DestinationIPv6Address, &offset, NULL);
@@ -688,13 +744,13 @@ size_t				size_required;
 	}
 
 	// decide between Delta or Total  counters - prefer Total if available
-	if ( cache.lookup_info[IPFIX_packetTotalCount].found )
+	if ( get_lookup_info(IPFIX_packetTotalCount)->found )
 		PushSequence( table, IPFIX_packetTotalCount, &offset, &table->packets);
 	else
 		PushSequence( table, IPFIX_packetDeltaCount, &offset, &table->packets);
 	SetFlag(table->flags, FLAG_PKG_64);
 
-	if ( cache.lookup_info[IPFIX_octetTotalCount].found )
+	if ( get_lookup_info(IPFIX_octetTotalCount)->found )
 		PushSequence( table, IPFIX_octetTotalCount, &offset, &table->bytes);
 	else
 		PushSequence( table, IPFIX_octetDeltaCount, &offset, &table->bytes);
@@ -848,8 +904,8 @@ size_t				size_required;
 
 	// for netflow historical reason, ICMP type/code goes into dst port field
 	// remember offset, for decoding
-	if ( cache.lookup_info[IPFIX_icmpTypeCodeIPv4].found && cache.lookup_info[IPFIX_icmpTypeCodeIPv4].length == 2 ) {
-		table->ICMP_offset = cache.lookup_info[IPFIX_icmpTypeCodeIPv4].offset;
+	if ( get_lookup_info(IPFIX_icmpTypeCodeIPv4)->found && get_lookup_info(IPFIX_icmpTypeCodeIPv4)->length == 2 ) {
+		table->ICMP_offset = get_lookup_info(IPFIX_icmpTypeCodeIPv4)->offset;
 	}
 
 #ifdef DEVEL
@@ -920,12 +976,16 @@ uint16_t Offset = 0;
 
 		// clear helper tables
 		memset((void *)cache.common_extensions, 0,  (Max_num_extensions+1)*sizeof(uint32_t));
-		memset((void *)cache.lookup_info, 0, 65536 * sizeof(struct element_param_s));
+		for (i=0; i < MAX_PENS; i++) {
+			if ( cache.lookup_info[i] != NULL)
+				memset((void *)cache.lookup_info[i], 0, 65536 * sizeof(struct element_param_s));
+		}
 		for (i=1; ipfix_element_map[i].id != 0; i++ ) {
-			uint32_t Type = ipfix_element_map[i].id;
+			uint32_t PEN = PEN_FROM_EID(ipfix_element_map[i].id);
+			uint16_t Type = ID_FROM_EID(ipfix_element_map[i].id);
 			if ( ipfix_element_map[i].id == ipfix_element_map[i-1].id )
 				continue;
-			cache.lookup_info[Type].index   = i;
+			cache.lookup_info[PEN_to_index(PEN)][Type].index   = i;
 			// other elements cleard be memset
 		}
 
@@ -957,14 +1017,32 @@ uint16_t Offset = 0;
 		NextElement 	 = (ipfix_template_elements_std_t *)ipfix_template_record->elements;
 		for ( i=0; i<count; i++ ) {
 			uint16_t Type, Length;
-			uint32_t ext_id;
-			int Enterprise;
+			uint32_t ext_id, PEN = 0;
 	
 			Type   = ntohs(NextElement->Type);
 			Length = ntohs(NextElement->Length);
-			Enterprise = Type & 0x8000 ? 1 : 0;
 
-			ext_id = MapElement(Type, Length, Offset);
+			if ( (Type & 0x8000) == 0x8000 ) {
+				ipfix_template_elements_e_t *e = (ipfix_template_elements_e_t *)NextElement;
+				size_required += 4;	// ad 4 for enterprise value
+				if ( size_left < size_required ) {
+					LogError("Process_ipfix: [%u] Not enough data for template elements! required: %i, left: %u", 
+							exporter->info.id, size_required, size_left);
+					dbg_printf("ERROR: Not enough data for template elements! required: %i, left: %u", size_required, size_left);
+					return;
+				}
+				PEN = ntohl(e->EnterpriseNumber);
+				dbg_printf(" [%i] Enterprise: 1, Type: %u, Length %u EnterpriseNumber: %u\n", i,
+                                           Type & 0x7FFF, Length, PEN);
+				e++;
+				NextElement = (ipfix_template_elements_std_t *)e;
+			} else {
+				dbg_printf(" [%i] Enterprise: 0, Type: %u, Length %u\n", i, Type, Length);
+				NextElement++;
+			}
+			Type = Type & 0x7FFF;
+
+			ext_id = MapElement(EID(PEN, Type), Length, Offset);
 
 			// do we store this extension? enabled != 0
 			// more than 1 v9 tag may map to an extension - so count this extension once only
@@ -976,22 +1054,6 @@ uint16_t Offset = 0;
 			} 
 			Offset += Length;
 	
-			if ( Enterprise ) {
-				ipfix_template_elements_e_t *e = (ipfix_template_elements_e_t *)NextElement;
-				size_required += 4;	// ad 4 for enterprise value
-				if ( size_left < size_required ) {
-					LogError("Process_ipfix: [%u] Not enough data for template elements! required: %i, left: %u", 
-							exporter->info.id, size_required, size_left);
-					dbg_printf("ERROR: Not enough data for template elements! required: %i, left: %u", size_required, size_left);
-					return;
-				}
-				dbg_printf(" [%i] Enterprise: 1, Type: %u, Length %u EnterpriseNumber: %u\n", i, Type, Length, ntohl(e->EnterpriseNumber));
-				e++;
-				NextElement = (ipfix_template_elements_std_t *)e;
-			} else {
-				dbg_printf(" [%i] Enterprise: 0, Type: %u, Length %u\n", i, Type, Length);
-				NextElement++;
-			}
 		}
 
 		dbg_printf("Processed: %u\n", size_required);

@@ -260,6 +260,13 @@ typedef struct ipfix_template_elements_e_s {
 #define IPFIX_flowEndMilliseconds			153
 // reserved 89
 
+// Enterprise-specific information elements encoded as a 64-bit value.
+// The element-id is composed of the PEN in the upper 32 bits and the
+// actual element-id in the lowest 16 bits.
+#define EID(PEN, id) (((uint64_t)(PEN)<<32) + (id))
+#define PEN_FROM_EID(EID) (uint32_t)((EID)>>32)
+#define ID_FROM_EID(EID)  (uint16_t)((EID) & 0xFFFF)
+
 /* prototypes */
 int Init_IPFIX(void);
 
