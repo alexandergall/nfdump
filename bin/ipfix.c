@@ -269,6 +269,9 @@ static struct ipfix_element_map_s {
 	{ IPFIX_postSourceMacAddress, 		 _6bytes,   _8bytes,  move_mac, zero64, EX_MAC_2},
 	{ IPFIX_flowStartMilliseconds, 		 _8bytes,   _8bytes,  Time64Mili, zero32, COMMON_BLOCK},
 	{ IPFIX_flowEndMilliseconds, 		 _8bytes,   _8bytes,  Time64Mili, zero32, COMMON_BLOCK},
+	{ IPFIX_bgpNextAdjacentAsNumber,         _4bytes,  _4bytes, move32, zero32, EX_BGPADJ },
+	{ IPFIX_bgpPrevAdjacentAsNumber,         _4bytes,  _4bytes, move32, zero32, EX_BGPADJ },
+
 	{0, 0, 0}
 };
 
@@ -882,7 +885,10 @@ size_t				size_required;
 				dbg_printf("Received offset: %u\n", offset);
 				offset				   += 8;
 				break;
-
+			case EX_BGPADJ:
+				PushSequence( table, IPFIX_bgpNextAdjacentAsNumber, &offset, NULL);
+				PushSequence( table, IPFIX_bgpPrevAdjacentAsNumber, &offset, NULL);
+				break;
 		}
 		extension_map->size += sizeof(uint16_t);
 		extension_map->extension_size += extension_descriptor[map_index].size;
