@@ -101,21 +101,24 @@ typedef struct sequence_map_s {
 #define move56  		6
 #define move64  		7
 #define move128 		8
-#define move32_sampling 9
-#define move64_sampling 10
-#define move_mac		11
-#define move_mpls 		12
-#define Time64Mili 		13
-#define saveICMP 		14
-#define zero8			15
-#define zero16			16
-#define zero32			17
-#define zero64			18
-#define zero128			19
+#define move_array              9
+#define move32_sampling         10
+#define move64_sampling         11
+#define move_mac		12
+#define move_mpls 		13
+#define Time64Mili 		14
+#define saveICMP 		15
+#define zero8			16
+#define zero16			17
+#define zero32			18
+#define zero64			19
+#define zero128			20
 
 	uint32_t	id;				// sequence ID as defined above
 	uint16_t	input_offset;	// copy/process data at this input offset
+        uint16_t        input_length;
 	uint16_t	output_offset;	// copy final data to this output offset
+        uint16_t        output_length;
 	void		*stack;			// optionally copy data onto this stack
 } sequence_map_t;
 
@@ -282,6 +285,7 @@ static struct cache_s {
 		uint16_t found;
 		uint16_t offset;
 		uint16_t length;
+		uint16_t out_length;
 	}               *lookup_info[MAX_PENS];
 	uint32_t	max_ipfix_elements;
 	uint32_t	*common_extensions;
@@ -462,6 +466,7 @@ struct element_param_s *lookup_info = get_lookup_info(eid);
 					lookup_info->found  = 1;
 					lookup_info->offset = Offset;
 					lookup_info->length = Length;
+					lookup_info->out_length = ipfix_element_map[index].out_length;
 					lookup_info->index  = index;
 					dbg_printf("found extension %u for type: %u, PEN: %u, input length: %u output length: %u Extension: %u\n", 
 						   ipfix_element_map[index].extension, ID_FROM_EID(ipfix_element_map[index].id),
@@ -613,7 +618,9 @@ uint32_t index = lookup_info->index;
 	if ( lookup_info != NULL && lookup_info->found ) {
 		table->sequence[i].id = ipfix_element_map[index].sequence;
 		table->sequence[i].input_offset  = lookup_info->offset;
+		table->sequence[i].input_length  = lookup_info->length;
 		table->sequence[i].output_offset = *offset;
+		table->sequence[i].output_length  = lookup_info->out_length;
 		table->sequence[i].stack = stack;
 	} else {
 		table->sequence[i].id = ipfix_element_map[index].zero_sequence;
@@ -1480,6 +1487,13 @@ char				*string;
 						t.val.val64 = Get_val64((void *)&in[input_offset+8]);
 						*((uint32_t *)&out[output_offset+8])  = t.val.val32[0];
 						*((uint32_t *)&out[output_offset+12]) = t.val.val32[1];
+					} break;
+				case move_array:
+					{ int size = table->sequence[i].input_length;
+
+						if (size < table->sequence[i].output_length)
+						  size = table->sequence[i].output_length;
+						memcpy((void *)&out[output_offset],(void *)&in[input_offset],size);
 					} break;
 				case move32_sampling:
 					/* 64bit access to potentially unaligned output buffer. use 2 x 32bit for _LP64 CPUs */
