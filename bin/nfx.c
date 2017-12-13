@@ -136,6 +136,9 @@ extension_descriptor_t extension_descriptor[] = {
         // HTTP method, host and URL
         { EX_HTTP,               104,    33, 0,  "HTTP"},
 
+        // HTTP method, host and URL
+        { EX_SWITCH_DNS,         212,    34, 0,  "SWITCH DNS"},
+
 	// last entry
 	{ 0,	0,	0, 0,	NULL }
 };

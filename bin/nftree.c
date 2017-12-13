@@ -87,6 +87,9 @@ static inline void duration_function(uint64_t *record_data, uint64_t *comp_value
 static inline void mpls_eos_function(uint64_t *record_data, uint64_t *comp_values);
 static inline void mpls_any_function(uint64_t *record_data, uint64_t *comp_values);
 static inline void pblock_function(uint64_t *record_data, uint64_t *comp_values);
+static inline void dns_qname_function(uint64_t *record_data, uint64_t *comp_values);
+static inline void dns_aname_function(uint64_t *record_data, uint64_t *comp_values);
+static inline void dns_rdata_function(uint64_t *record_data, uint64_t *comp_values);
 
 /* 
  * flow processing function table:
@@ -104,6 +107,9 @@ static struct flow_procs_map_s {
 	{"mpls eos",	mpls_eos_function},
 	{"mpls any",	mpls_any_function},
  	{"pblock", 		pblock_function},
+        {"dns query name",      dns_qname_function},
+        {"dns answer name",     dns_aname_function},
+        {"dns rdata",           dns_rdata_function},
 	{NULL,			NULL}
 };
 
@@ -651,3 +657,18 @@ master_record_t *record = (master_record_t *)record_data;
 
 } // End of pblock_function
 
+static inline void dns_qname_function(uint64_t *record_data, uint64_t *comp_values) {
+master_record_t *record = (master_record_t *)record_data;
+        comp_values[0] = (uint64_t)decode_dnsName(record->DNS_qName, LengthDNSqName);
+}
+
+static inline void dns_aname_function(uint64_t *record_data, uint64_t *comp_values) {
+master_record_t *record = (master_record_t *)record_data;
+        comp_values[0] = (uint64_t)decode_dnsName(record->DNS_aName, LengthDNSaName);
+}
+
+static inline void dns_rdata_function(uint64_t *record_data, uint64_t *comp_values) {
+master_record_t *record = (master_record_t *)record_data;
+        comp_values[0] = (uint64_t)decode_dnsRdata(record->DNS_aRdata, sizeof(record->DNS_aRdata),
+                                                   record->DNS_aType, record->DNS_aRdataLen);
+}

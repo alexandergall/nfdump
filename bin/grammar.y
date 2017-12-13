@@ -70,7 +70,9 @@ enum { DIR_UNSPEC = 1,
 	   SOURCE, DESTINATION, SOURCE_AND_DESTINATION, SOURCE_OR_DESTINATION, 
 	   DIR_IN, DIR_OUT, 
 	   IN_SRC, IN_DST, OUT_SRC, OUT_DST, 
-	   ADJ_PREV, ADJ_NEXT };
+	   ADJ_PREV, ADJ_NEXT,
+	   DNS_Q, DNS_A
+};
 
 enum { IS_START = 0, IS_END };
 
@@ -106,7 +108,8 @@ char yyerror_buff[256];
 %token NAT ADD EVENT VRF NPORT NIP
 %token PBLOCK START END STEP SIZE QUOTED_STRING
 %token H_HOST H_METHOD H_TARGET
-%type <value>	expr NUMBER PORTNUM ICMP_TYPE ICMP_CODE
+%token DNSQ DNSA DNS_TYPE DNS_CLASS DNS_QUERY DNS_RESPONSE DNS_OPCODE DNS_FLAG DNS_RCODE DNS_NAME DNS_RDATA
+%type <value>	expr NUMBER PORTNUM ICMP_TYPE ICMP_CODE dns_opcode dns_rcode dns_type dns_class
 %type <s> STRING REASON QUOTED_STRING
 %type <param> dqual term comp acl inout
 %type <list> iplist ullist
@@ -1816,8 +1819,8 @@ term:	ANY { /* this is an unconditionally true expression, as a filter applies i
 			yyerror("Invalid regular expression");
 			YYABORT;
 		}
-		$$.self = NewBlock(OffsetHTTPhost, 0,
-				   (uint64_t)&regex, CMP_REGEX, FUNC_NONE, NULL);
+		$$.self = NewBlock(OffsetHTTPhost, 0, 0,
+				   CMP_REGEX, FUNC_NONE, (void *)&regex);
 	}
 
 	| H_METHOD QUOTED_STRING {
@@ -1827,8 +1830,8 @@ term:	ANY { /* this is an unconditionally true expression, as a filter applies i
 			yyerror("Invalid regular expression");
 			YYABORT;
 		}
-		$$.self = NewBlock(OffsetHTTPmethod, 0,
-				   (uint64_t)&regex, CMP_REGEX, FUNC_NONE, NULL);
+		$$.self = NewBlock(OffsetHTTPmethod, 0, 0,
+				   CMP_REGEX, FUNC_NONE, (void *)&regex);
 	}
 
 	| H_TARGET QUOTED_STRING {
@@ -1838,9 +1841,171 @@ term:	ANY { /* this is an unconditionally true expression, as a filter applies i
 			yyerror("Invalid regular expression");
 			YYABORT;
 		}
-		$$.self = NewBlock(OffsetHTTPtarget, 0,
-				   (uint64_t)&regex, CMP_REGEX, FUNC_NONE, NULL);
+		$$.self = NewBlock(OffsetHTTPtarget, 0, 0,
+				   CMP_REGEX, FUNC_NONE, (void *)&regex);
 	}
+
+	| dqual DNS_TYPE dns_type {
+	        uint64_t type = $3;
+		uint32_t blockq, blocka;
+	        if ( type == 0 || type > 65535 ) {
+		        yyerror("Invalid DNS RR type");
+			YYABORT;
+		}
+		blockq = NewBlock(OffsetDNSqType, MaskDNSqType,
+				  (type << ShiftDNSqType) & MaskDNSqType,
+				  CMP_EQ, FUNC_NONE, NULL);
+		blocka = NewBlock(OffsetDNSaType, MaskDNSaType,
+				  (type << ShiftDNSaType) & MaskDNSaType,
+				  CMP_EQ, FUNC_NONE, NULL);
+		switch ( $1.direction ) {
+			case DNS_Q:
+				$$.self = blockq;
+				break;
+			case DNS_A:
+				$$.self = blocka;
+				break;
+			case DIR_UNSPEC:
+				$$.self = Connect_OR(blockq, blocka);
+				break;
+		}
+	}
+
+	| dqual DNS_CLASS dns_class {
+		uint64_t class = $3;
+		uint32_t blockq, blocka;
+	        if ( class == 0 || class > 65535 ) {
+		        yyerror("Invalid DNS class");
+			YYABORT;
+		}
+		blockq = NewBlock(OffsetDNSqClass, MaskDNSqClass,
+				  (class << ShiftDNSqClass) & MaskDNSqClass,
+				  CMP_EQ, FUNC_NONE, NULL);
+		blocka = NewBlock(OffsetDNSaClass, MaskDNSaClass,
+				  (class << ShiftDNSaClass) & MaskDNSaClass,
+				  CMP_EQ, FUNC_NONE, NULL);
+		switch ( $1.direction ) {
+			case DNS_Q:
+				$$.self = blockq;
+				break;
+			case DNS_A:
+				$$.self = blocka;
+				break;
+			case DIR_UNSPEC:
+				$$.self = Connect_OR(blockq, blocka);
+				break;
+		}
+	}
+
+	| DNS_QUERY {
+		uint16_t mask_qr = 0x8000;
+		uint64_t qr = 0;
+		$$.self = NewBlock(OffsetDNSflagsCodes, MaskDNSflagsCodes & mask_qr,
+				   (qr << ShiftDNSflagsCodes) & MaskDNSflagsCodes,
+				   CMP_EQ, FUNC_NONE, NULL);
+	}
+
+	| DNS_RESPONSE {
+		uint16_t mask_qr = 0x8000;
+		uint64_t qr = 0x8000;
+		$$.self = NewBlock(OffsetDNSflagsCodes, MaskDNSflagsCodes & mask_qr,
+				   (qr << ShiftDNSflagsCodes) & MaskDNSflagsCodes,
+				   CMP_EQ, FUNC_NONE, NULL);
+	}
+
+	| DNS_OPCODE comp dns_opcode {
+		uint16_t mask_opcode = 0x7800;
+		uint64_t opcode = $3;
+		if ( opcode < 0 || opcode > 15 ) {
+			yyerror("Invalid DNS opcode");
+			YYABORT;
+		}
+		opcode = opcode << 11;
+		$$.self = NewBlock(OffsetDNSflagsCodes, MaskDNSflagsCodes & mask_opcode,
+				   (opcode << ShiftDNSflagsCodes) & MaskDNSflagsCodes,
+				   $2.comp, FUNC_NONE, NULL);
+	}
+
+	| DNS_FLAG STRING {
+		uint64_t flag;
+		if ( strcasecmp($2, "aa") == 0 )
+			flag = 0x40;
+		else if ( strcasecmp($2, "tc") == 0 )
+			flag = 0x20;
+		else if ( strcasecmp($2, "rd") == 0 )
+			flag = 0x10;
+		else if ( strcasecmp($2, "ra") == 0 )
+			flag = 0x08;
+		else if ( strcasecmp($2, "ad") == 0 )
+			flag = 0x02;
+		else if ( strcasecmp($2, "cd") == 0 )
+			flag = 0x01;
+		else {
+			yyerror("Invalid DNS flag");
+			YYABORT;
+		}
+		flag = flag << 4;
+		$$.self = NewBlock(OffsetDNSflagsCodes, MaskDNSflagsCodes & flag,
+				   (flag << ShiftDNSflagsCodes) & MaskDNSflagsCodes,
+				   CMP_EQ, FUNC_NONE, NULL);
+	}
+
+	| DNS_RCODE comp dns_rcode {
+		uint16_t mask_rcode = 0x000F;
+		if ( $3 < 0 || $3 > 15 ) {
+			yyerror("Invalud DNS rcode");
+			YYABORT;
+		}
+		$$.self = NewBlock(OffsetDNSflagsCodes, MaskDNSflagsCodes & mask_rcode,
+				   ($3 << ShiftDNSflagsCodes) & MaskDNSflagsCodes,
+				   $2.comp, FUNC_NONE, NULL);
+	}
+
+	| dqual DNS_NAME QUOTED_STRING {
+		static regex_t regex;
+		int result;
+		uint32_t blockq = NewBlock(OffsetDNSqName, 0, 0,
+					   CMP_REGEX, FUNC_DNS_QNAME, (void *)&regex);
+		uint32_t blocka = NewBlock(OffsetDNSaName, 0, 0,
+					   CMP_REGEX, FUNC_DNS_ANAME, (void *)&regex);
+
+		if ( (result = regcomp(&regex, $3, REG_EXTENDED|REG_ICASE|REG_NOSUB)) != 0) {
+			yyerror("Invalid regular expression");
+			YYABORT;
+		}
+		switch ( $1.direction ) {
+			case DNS_Q:
+				$$.self = blockq;
+				break;
+			case DNS_A:
+				$$.self = blocka;
+				break;
+			case DIR_UNSPEC:
+				$$.self = Connect_OR(blockq, blocka);
+				break;
+		}
+	}
+
+	| DNS_RDATA QUOTED_STRING {
+		static regex_t regex;
+                int result;
+		if ( (result = regcomp(&regex, $2, REG_EXTENDED|REG_ICASE|REG_NOSUB)) != 0) {
+			yyerror("Invalid regular expression");
+			YYABORT;
+		}
+		$$.self = NewBlock(OffsetDNSaRdata, 0, 0,
+                                   CMP_REGEX, FUNC_DNS_RDATA, (void *)&regex);
+	}
+
+
+dns_opcode: STRING { $$ = DNS_get_opcode($1); } | NUMBER ;
+
+dns_rcode: STRING { $$ = DNS_get_rcode($1); } | NUMBER ;
+
+dns_type: STRING { $$ = DNS_get_rr_type($1); } | NUMBER ;
+
+dns_class: QUOTED_STRING { $$ = DNS_get_class($1); } | NUMBER ;
+
 /* iplist definition */
 iplist:	STRING	{ 
 		int i, af, bytes, ret;
@@ -2114,6 +2279,8 @@ dqual:	  			{ $$.direction = DIR_UNSPEC;  			 }
 	| OUT DST		{ $$.direction = OUT_DST;				 }
 	| PREV			{ $$.direction = ADJ_PREV;				 }
 	| NEXT			{ $$.direction = ADJ_NEXT;				 }
+	| DNSQ			{ $$.direction = DNS_Q;	     			         }
+	| DNSA			{ $$.direction = DNS_A;	     			         }
 	;
 
 inout: INGRESS		{ $$.inout	= INGRESS;	}

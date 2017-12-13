@@ -116,6 +116,18 @@ void Proto_string(uint8_t protonum, char *protostr);
 
 void condense_v6(char *s);
 
+char *decode_dnsName(char *src, int size);
+
+char *decode_dnsRdata(char *rdata, int size, int type, int rdlen);
+
+uint16_t DNS_get_rr_type(char *name);
+
+uint16_t DNS_get_class(char *name);
+
+uint8_t DNS_get_opcode(char *name);
+
+uint8_t DNS_get_rcode(char *name);
+
 #define TAG_CHAR ''
 
 #endif //_NF_COMMON_H

@@ -275,6 +275,19 @@ static struct ipfix_element_map_s {
 	{ IPFIX_httpRequestHost, 	              32,        32, move_array, zero8, EX_HTTP },
 	{ IPFIX_httpRequestTarget, 	              64,        64, move_array, zero8, EX_HTTP },
 
+	{ IPFIX_SWITCH_dnsFlagsCodes,            _2bytes,   _2bytes, move16,    zero16, EX_SWITCH_DNS },
+	{ IPFIX_SWITCH_dnsQuestionCount,         _2bytes,   _2bytes, move16,    zero16, EX_SWITCH_DNS },
+	{ IPFIX_SWITCH_dnsAnswerCount,           _2bytes,   _2bytes, move16,    zero16, EX_SWITCH_DNS },
+	{ IPFIX_SWITCH_dnsQuestionName,               64,        64, move_array, zero8, EX_SWITCH_DNS },
+	{ IPFIX_SWITCH_dnsQuestionType,          _2bytes,   _2bytes, move16,    zero16, EX_SWITCH_DNS },
+	{ IPFIX_SWITCH_dnsQuestionClass,         _2bytes,   _2bytes, move16,    zero16, EX_SWITCH_DNS },
+	{ IPFIX_SWITCH_dnsAnswerName,                 64,        64, move_array, zero8, EX_SWITCH_DNS },
+	{ IPFIX_SWITCH_dnsAnswerType,            _2bytes,   _2bytes, move16,    zero16, EX_SWITCH_DNS },
+	{ IPFIX_SWITCH_dnsAnswerClass,           _2bytes,   _2bytes, move16,    zero16, EX_SWITCH_DNS },
+	{ IPFIX_SWITCH_dnsAnswerTtl,             _4bytes,   _4bytes, move32,    zero32, EX_SWITCH_DNS },
+	{ IPFIX_SWITCH_dnsAnswerRdata,                64,        64, move_array, zero8, EX_SWITCH_DNS },
+	{ IPFIX_SWITCH_dnsAnswerRdataLen,        _2bytes,   _2bytes, move16,    zero16, EX_SWITCH_DNS },
+
 	{0, 0, 0}
 };
 
@@ -896,6 +909,19 @@ size_t				size_required;
 				PushSequence( table, IPFIX_httpRequestMethod, &offset, NULL);
 				PushSequence( table, IPFIX_httpRequestHost, &offset, NULL);
 				PushSequence( table, IPFIX_httpRequestTarget, &offset, NULL);
+                        case EX_SWITCH_DNS:
+				PushSequence( table, IPFIX_SWITCH_dnsFlagsCodes, &offset, NULL);
+				PushSequence( table, IPFIX_SWITCH_dnsQuestionCount, &offset, NULL);
+				PushSequence( table, IPFIX_SWITCH_dnsAnswerCount, &offset, NULL);
+				PushSequence( table, IPFIX_SWITCH_dnsQuestionType, &offset, NULL);
+				PushSequence( table, IPFIX_SWITCH_dnsQuestionClass, &offset, NULL);
+				PushSequence( table, IPFIX_SWITCH_dnsAnswerType, &offset, NULL);
+				PushSequence( table, IPFIX_SWITCH_dnsAnswerClass, &offset, NULL);
+				PushSequence( table, IPFIX_SWITCH_dnsAnswerRdataLen, &offset, NULL);
+				PushSequence( table, IPFIX_SWITCH_dnsQuestionName, &offset, NULL);
+				PushSequence( table, IPFIX_SWITCH_dnsAnswerName, &offset, NULL);
+				PushSequence( table, IPFIX_SWITCH_dnsAnswerRdata, &offset, NULL);
+				PushSequence( table, IPFIX_SWITCH_dnsAnswerTtl, &offset, NULL);
 		}
 		extension_map->size += sizeof(uint16_t);
 		extension_map->extension_size += extension_descriptor[map_index].size;

@@ -371,6 +371,25 @@ void		*p = (void *)input_record;
 				memcpy((void *)output_record->HTTP_target, (void *)tpl->target, size);
 				p = (void *)tpl->data;
 			} break;
+			case EX_SWITCH_DNS: {
+				tpl_ext_51_t *tpl = (tpl_ext_51_t *)p;
+                                output_record->DNS_flagsCodes = tpl->flagsCodes;
+                                output_record->DNS_qCount = tpl->qCount;
+                                output_record->DNS_aCount = tpl->aCount;
+                                output_record->DNS_qType = tpl->qType;
+                                output_record->DNS_qClass = tpl->qClass;
+                                output_record->DNS_aType = tpl->aType;
+                                output_record->DNS_aClass = tpl->aClass;
+                                output_record->DNS_aRdataLen = tpl->aRdataLen;
+                                output_record->DNS_aTtl = tpl->aTtl;
+				int size = sizeof(output_record->DNS_qName);
+				memcpy((void *)output_record->DNS_qName, (void *)tpl->qName, size);
+				size = sizeof(output_record->DNS_aName);
+				memcpy((void *)output_record->DNS_aName, (void *)tpl->aName, size);
+				size = sizeof(output_record->DNS_aRdata);
+				memcpy((void *)output_record->DNS_aRdata, (void *)tpl->aRdata, size);
+				p = (void *)tpl->data;
+			} break;
 
 #ifdef NSEL
 			case EX_NSEL_COMMON: {

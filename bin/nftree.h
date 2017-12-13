@@ -94,7 +94,10 @@ enum { 	FUNC_NONE = 0,	/* no function - just plain filtering - just to be comple
 		FUNC_DURATION,	/* function code for duration ( in miliseconds ) filter function */
 		FUNC_MPLS_EOS,	/* function code for matching End of MPLS Stack label */
 		FUNC_MPLS_ANY,	/* function code for matching any MPLS label */ 
-		FUNC_PBLOCK		/* function code for matching ports against pblock start */
+		FUNC_PBLOCK,		/* function code for matching ports against pblock start */
+	        FUNC_DNS_QNAME,		/* function code for converting the DNS query name into a string */
+	        FUNC_DNS_ANAME,		/* function code for converting the DNS answer name into a string */
+	        FUNC_DNS_RDATA		/* function code for converting the DNS RDATA section into a string */
 };
 
 /* 

@@ -179,6 +179,18 @@ hhost                   { return H_HOST; }
 hmethod                 { return H_METHOD; }
 htarget                 { return H_TARGET; }
 
+dnsq			{ return DNSQ; }
+dnsa			{ return DNSA; }
+dns-type		{ return DNS_TYPE; }
+dns-class		{ return DNS_CLASS; }
+dns-query	       	{ return DNS_QUERY; }
+dns-response	       	{ return DNS_RESPONSE; }
+dns-opcode	       	{ return DNS_OPCODE; }
+dns-flag	       	{ return DNS_FLAG; }
+dns-rcode	       	{ return DNS_RCODE; }
+dns-name	       	{ return DNS_NAME; }
+dns-rdata               { return DNS_RDATA; }
+
 asa				{ return ASA; 		/* NSEL filter */ }
 event			{ return EVENT; 	/* NEL/NSEL filter */ }
 ignore|invalid|create|add|term|delete|deny	{ 	/* NSEL filter */

@@ -274,6 +274,19 @@ typedef struct ipfix_template_elements_e_s {
 #define PEN_FROM_EID(EID) (uint32_t)((EID)>>32)
 #define ID_FROM_EID(EID)  (uint16_t)((EID) & 0xFFFF)
 
+#define IPFIX_SWITCH_dnsFlagsCodes     EID(2946, 100)
+#define IPFIX_SWITCH_dnsQuestionCount  EID(2946, 101)
+#define IPFIX_SWITCH_dnsAnswerCount    EID(2946, 102)
+#define IPFIX_SWITCH_dnsQuestionName   EID(2946, 103)
+#define IPFIX_SWITCH_dnsQuestionType   EID(2946, 104)
+#define IPFIX_SWITCH_dnsQuestionClass  EID(2946, 105)
+#define IPFIX_SWITCH_dnsAnswerName     EID(2946, 106)
+#define IPFIX_SWITCH_dnsAnswerType     EID(2946, 107)
+#define IPFIX_SWITCH_dnsAnswerClass    EID(2946, 108)
+#define IPFIX_SWITCH_dnsAnswerTtl      EID(2946, 109)
+#define IPFIX_SWITCH_dnsAnswerRdata    EID(2946, 110)
+#define IPFIX_SWITCH_dnsAnswerRdataLen EID(2946, 111)
+
 /* prototypes */
 int Init_IPFIX(void);
 

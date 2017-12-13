@@ -232,6 +232,38 @@ static void String_HttpHost(master_record_t *r, char *string);
 
 static void String_HttpTarget(master_record_t *r, char *string);
 
+static char *hexdump(uint8_t *src, int size);
+
+static void String_DNSqr(master_record_t *r, char *string);
+
+static void String_DNSop(master_record_t *r, char *string);
+
+static void String_DNSflags(master_record_t *r, char *string);
+
+static void String_DNSrcode(master_record_t *r, char *string);
+
+static void String_DNSqCount(master_record_t *r, char *string);
+
+static void String_DNSaCount(master_record_t *r, char *string);
+
+static void String_DNSqName(master_record_t *r, char *string);
+
+static void String_DNSqType(master_record_t *r, char *string);
+
+static void String_DNSqClass(master_record_t *r, char *string);
+
+static void String_DNSaName(master_record_t *r, char *string);
+
+static void String_DNSaType(master_record_t *r, char *string);
+
+static void String_DNSaClass(master_record_t *r, char *string);
+
+static void String_DNSaTtl(master_record_t *r, char *string);
+
+static void String_DNSaRdata(master_record_t *r, char *string);
+
+static void String_DNSaRdataLen(master_record_t *r, char *string);
+
 #ifdef NSEL
 static void String_EventTime(master_record_t *r, char *string);
 
@@ -353,6 +385,23 @@ static struct format_token_list_s {
 	{ "%hmethod", 0,  "Method ", String_HttpMethod },
 	{ "%hhost", 0, "Host                           ", String_HttpHost },
 	{ "%htarget", 0,  "URL                                                            ", String_HttpTarget },
+
+	// DNS
+	{ "%dnsqr",  0, "QR", String_DNSqr },
+	{ "%dnsop",  0, "Op", String_DNSop },
+	{ "%dnsflags",  0, "Flags            ", String_DNSflags },
+	{ "%dnsrcode",  0, "Rcode   ", String_DNSrcode },
+	{ "%dnsqcount", 0, "Qcount", String_DNSqCount },
+	{ "%dnsacount", 0, "Acount", String_DNSaCount },
+	{ "%dnsqname",  0, "Qname                           ",  String_DNSqName },
+	{ "%dnsqtype",  0, "Qtype  ",  String_DNSqType },
+	{ "%dnsqclass", 0, "Qclass", String_DNSqClass },
+	{ "%dnsaname",  0, "Aname                           ",  String_DNSaName },
+	{ "%dnsatype",  0, "Atype  ",  String_DNSaType },
+	{ "%dnsaclass", 0, "Aclass", String_DNSaClass },
+	{ "%dnsattl",   0, "Attl  ",   String_DNSaTtl },
+	{ "%dnsardata", 0, "Ardata", String_DNSaRdata },
+	{ "%dnsardatalen", 0, "ARdLen", String_DNSaRdataLen },
 
 #ifdef NSEL
 // NSEL specifics
@@ -573,6 +622,143 @@ static struct fwd_status_def_s {
 	{ 130,	"TincAdj"}, // Terminate Incomplete Adjacency
 	{ 131,	"Tforus"}, 	// Terminate For us
 	{ 0,	NULL}		// Last entry
+};
+
+static struct {
+	struct dns_opcode_s {
+		char *short_name;
+		char *long_name;
+	} opcodes[16];
+	char *rcodes[16];
+	struct dns_rr_type_s {
+		uint16_t type;
+		char *name;
+	} rr_types[];
+} dns_params = {
+	{
+		{ "Q", "Query" },
+		{ "I", "IQuery" },
+		{ "S", "Status" },
+		{ NULL, NULL},
+		{ "N", "Notify" },
+		{ "U", "Update" },
+		{ NULL, NULL},
+		{ NULL, NULL},
+		{ NULL, NULL},
+		{ NULL, NULL},
+		{ NULL, NULL},
+		{ NULL, NULL},
+		{ NULL, NULL},
+		{ NULL, NULL},
+		{ NULL, NULL},
+		{ NULL, NULL},
+	},
+	{
+		"NoError",
+		"FormErr",
+		"ServFail",
+		"NXDomain",
+		"NotImp",
+		"Refused",
+		"YXDomain",
+		"YXRRset",
+		"NXRRset",
+		"NotAuth",
+		"NotZone",
+		NULL,
+		NULL,
+		NULL,
+		NULL,
+		NULL
+	},
+	{
+		{ 1, "A" },
+		{ 2, "NS" },
+		{ 3, "MD" },
+		{ 4, "MF" },
+		{ 5, "CNAME" },
+		{ 6, "SOA" },
+		{ 7, "MB" },
+		{ 8, "MG" },
+		{ 9, "MR" },
+		{ 10, "NULL" },
+		{ 11, "WKS" },
+		{ 12, "PTR" },
+		{ 13, "HINFO" },
+		{ 14, "MINFO" },
+		{ 15, "MX" },
+		{ 16, "TXT" },
+		{ 17, "RP" },
+		{ 18, "AFSDB" },
+		{ 19, "X25" },
+		{ 20, "ISDN" },
+		{ 21, "RT" },
+		{ 22, "NSAP" },
+		{ 23, "NSAP-PTR" },
+		{ 24, "SIG" },
+		{ 25, "KEY" },
+		{ 26, "PX" },
+		{ 27, "GPOS" },
+		{ 28, "AAAA" },
+		{ 29, "LOC" },
+		{ 30, "NXT" },
+		{ 31, "EID" },
+		{ 32, "NIMLOC" },
+		{ 33, "SRV" },
+		{ 34, "ATMA" },
+		{ 35, "NAPTR" },
+		{ 36, "KX" },
+		{ 37, "CERT" },
+		{ 38, "A6" },
+		{ 39, "DNAME" },
+		{ 40, "SINK" },
+		{ 41, "OPT" },
+		{ 42, "APL" },
+		{ 43, "DS" },
+		{ 44, "SSHFP" },
+		{ 45, "IPSECKEY" },
+		{ 46, "RRSIG" },
+		{ 47, "NSEC" },
+		{ 48, "DNSKEY" },
+		{ 49, "DHCID" },
+		{ 50, "NSEC3" },
+		{ 51, "NSEC3PARAM" },
+		{ 52, "TLSA" },
+		{ 53, "SMIMEA" },
+		{ 55, "HIP" },
+		{ 56, "NINFO" },
+		{ 57, "RKEY" },
+		{ 58, "TALINK" },
+		{ 59, "CDS" },
+		{ 60, "CDNSKEY" },
+		{ 61, "OPENPGPKEY" },
+		{ 62, "CSYNC" },
+		{ 99, "SPF" },
+		{ 100, "UINFO" },
+		{ 101, "UID" },
+		{ 102, "GID" },
+		{ 103, "UNSPEC" },
+		{ 104, "NID" },
+		{ 105, "L32" },
+		{ 106, "L64" },
+		{ 107, "LP" },
+		{ 108, "EUI48" },
+		{ 109, "EUI64" },
+		{ 249, "TKEY" },
+		{ 250, "TSIG" },
+		{ 251, "IXFR" },
+		{ 252, "AXFR" },
+		{ 253, "MAILB" },
+		{ 254, "MAILA" },
+		{ 255, "*" },
+		{ 256, "URI" },
+		{ 257, "CAA" },
+		{ 258, "AVC" },
+		{ 259, "DOA" },
+		{ 32768, "TA" },
+		{ 32769, "DLV" },
+		{ 0, NULL }
+	}
 };
 
 char *NSEL_event_string[6] = {
@@ -1219,6 +1405,36 @@ extension_map_t	*extension_map = r->map_ref;
 , r->HTTP_method[0] ? r->HTTP_method : " <empty>",
   r->HTTP_host[0] ? r->HTTP_host : " <empty>",
   r->HTTP_target[0] ? r->HTTP_target : " <empty>");
+                                _slen = strlen(data_string);
+                                _s = data_string + _slen;
+                                slen = STRINGSIZE - _slen;
+                                break;
+                        case EX_SWITCH_DNS:
+                                snprintf(_s, slen-1,
+"  DNS Flags    =            0x%04x\n"
+"  DNS Qcount   =                %2u\n"
+"  DNS Acount   =                %2u\n"
+"  DNS Qname    = %s\n"
+"  DNS Qtype    =                %2u\n"
+"  DNS Qclass   =                %2u\n"
+"  DNS Aname    = %s\n"
+"  DNS Atype    =                %2u\n"
+"  DNS Aclass   =                %2u\n"
+"  DNS ATtl     =            %6u\n"
+"  DNS ARdLen   =               %3u\n"
+"  DNS ARdata   = %s\n"
+, r->DNS_flagsCodes,
+  r->DNS_qCount,
+  r->DNS_aCount,
+  decode_dnsName(r->DNS_qName, sizeof(r->DNS_qName)),
+  r->DNS_qType,
+  r->DNS_qClass,
+  decode_dnsName(r->DNS_aName, sizeof(r->DNS_aName)),
+  r->DNS_aType,
+  r->DNS_aClass,
+  r->DNS_aTtl,
+  r->DNS_aRdataLen,
+  hexdump((uint8_t *)r->DNS_aRdata, r->DNS_aRdataLen));
                                 _slen = strlen(data_string);
                                 _s = data_string + _slen;
                                 slen = STRINGSIZE - _slen;
@@ -2671,6 +2887,251 @@ static void String_HttpHost(master_record_t *r, char *string) {
 
 static void String_HttpTarget(master_record_t *r, char *string) {
         string_generic(r->HTTP_target, string, sizeof(r->HTTP_target));
+}
+
+uint16_t DNS_get_rr_type(char *name) {
+	int i;
+	struct dns_rr_type_s *rr_types = dns_params.rr_types;
+	for ( i=0; rr_types[i].type != 0; i++) {
+		if ( strcasecmp(rr_types[i].name, name) == 0 )
+			return rr_types[i].type;
+	}
+	return 0;
+}
+
+uint16_t DNS_get_class(char *name) {
+        if ( strcasecmp("IN", name) == 0 )
+                return 1;
+        else if ( strcasecmp("CH", name) == 0 )
+                return 3;
+        else if ( strcasecmp("HS", name) == 0 )
+                return 4;
+        else if ( strcasecmp("NONE", name) == 0 )
+                return 254;
+        else if ( strcasecmp("ANY", name) == 0 )
+                return 255;
+        else
+                return 0;
+}
+
+uint8_t DNS_get_opcode(char *name) {
+	int i;
+	struct dns_opcode_s *opcodes = dns_params.opcodes;
+	for ( i=0; i<16; i++)
+		if ( opcodes[i].short_name != NULL &&
+		     ( strcasecmp(opcodes[i].long_name, name) == 0 ||
+		       strcasecmp(opcodes[i].short_name, name) == 0 ) )
+			return i;
+	return 16;
+}
+
+uint8_t DNS_get_rcode(char *name) {
+	int i;
+	for ( i=0; i<16; i++)
+		if ( dns_params.rcodes[i] != NULL &&
+		     strcasecmp(dns_params.rcodes[i], name) == 0)
+			return i;
+	return 16;
+}
+
+char *decode_dnsName(char *src, int size) {
+	static char name[256];
+	int i, avail, len = 0, offset = 0;
+	for (i=0; src[i] != 0; i += len + 1) {
+		len = src[i];
+		avail = sizeof(name) - offset;
+		if ( len > avail - 1 || len >= size - i - 1 ) {
+			int min = MIN(size - i - 1, avail - 1);
+			memcpy(&name[offset], &src[i+1], min);
+			offset = offset + min;
+			break;
+		} else {
+			memcpy(&name[offset], &src[i+1], len);
+			name[offset+len] = '.';
+			offset = offset + len + 1;
+		}
+	}
+	if ( offset == 0 )
+		sprintf(name, "<empty>");
+	else
+		name[offset] = '\0';
+
+	return  name;
+}
+
+char *decode_dnsRdata(char *rdata, int size, int type, int rdlen) {
+        static char string[256];
+	string[0] = '\0';
+        /* Assume that the RR types are independent of the class */
+        switch(type) {
+        case 1:
+                // A
+                inet_ntop(AF_INET, rdata, string, sizeof(string)-1);
+                break;
+        case 28:
+                // AAAA
+                inet_ntop(AF_INET6, rdata, string, sizeof(string)-1);
+                break;
+        case 2:
+        case 5:
+        case 12:
+                // NS, CNAME, PTR
+                snprintf(string, sizeof(string)-1, "%-32s",
+                         decode_dnsName(rdata, size));
+                break;
+        case 15: {
+                // MX
+                uint16_t pref = ntohs(*(uint16_t *)rdata);
+                snprintf(string, sizeof(string)-1, "%d %s", pref,
+                         decode_dnsName(rdata + 2, size - 2));
+                break;
+        }
+        case 16: {
+                //TXT
+                uint8_t length = MIN(*(uint8_t *)rdata, rdlen);
+                snprintf(string, MIN(length+1, sizeof(string)-1), "%s", rdata + 1);
+                break;
+        }
+        default:
+                // Hexdump of the RDATA section
+                snprintf(string, sizeof(string)-1, "%s",
+                         hexdump((uint8_t *)rdata, MIN(size, rdlen)));
+        }
+        return string;
+}
+
+static char *hexdump(uint8_t *src, int size) {
+	static char buf[256];
+	int i;
+	for ( i=0; i<size && 2*i<sizeof(buf)-1; i++ ) {
+		sprintf(&buf[i*2], "%02X", src[i]);
+	}
+	if ( i == 0 )
+		sprintf(buf, "<empty>");
+	else
+		buf[i*2] = '\0';
+	return buf;
+}
+
+static void DNS_class(char *string, uint16_t class) {
+	static char *IN = "IN";
+	static char *CH = "CH";
+	static char *NONE = "NONE";
+	static char *ANY = "ANY";
+	char *name;
+	if ( class == 1 )
+		name = IN;
+	else if ( class == 3 )
+		name = CH;
+	else if ( class == 254 )
+		name = NONE;
+	else if ( class == 255 )
+		name = ANY;
+	else
+		name = NULL;
+	if ( name != NULL )
+		snprintf(string, MAX_STRING_LENGTH-1, "%-4s  ", name);
+	else
+		snprintf(string, MAX_STRING_LENGTH-1, "%-4d  ", class);
+}
+
+static void DNS_type(char *string, uint16_t type) {
+	int i;
+	for ( i=0; dns_params.rr_types[i].type != 0; i++ ) {
+		if ( dns_params.rr_types[i].type == type ){
+			snprintf(string, MAX_STRING_LENGTH-1, "%-6s ",
+				 dns_params.rr_types[i].name);
+			return;
+		}
+		snprintf(string, MAX_STRING_LENGTH-1, "%-6d ", type);
+	}
+}
+
+static void String_DNSqr(master_record_t *r, char *string) {
+	int qr = (r->DNS_flagsCodes & 0x8000) >> 15;
+	snprintf(string, MAX_STRING_LENGTH-1, "%-2s",
+		 qr == 1 ? "R" : "Q");
+}
+
+static void String_DNSop(master_record_t *r, char *string) {
+	int opcode = (r->DNS_flagsCodes >> 11) & 0x0F;
+	char *name = dns_params.opcodes[opcode].short_name;
+	if ( name != NULL )
+		snprintf(string, MAX_STRING_LENGTH-1, "%-2s",
+			 name);
+	else
+		snprintf(string, MAX_STRING_LENGTH-1, "%-2u",
+			 opcode);
+}
+
+static void String_DNSflags(master_record_t *r, char *string) {
+	int flags = (r->DNS_flagsCodes >> 4) & 0x7F;
+	snprintf(string, MAX_STRING_LENGTH-1, "%s|%s|%s|%s|%s|%s",
+		 (flags & 0x40) == 0x40 ? "AA" : "..",
+		 (flags & 0x20) == 0x20 ? "TC" : "..",
+		 (flags & 0x10) == 0x10 ? "RD" : "..",
+		 (flags & 0x08) == 0x08 ? "RA" : "..",
+		 (flags & 0x02) == 0x02 ? "AD" : "..",
+		 (flags & 0x01) == 0x01 ? "CD" : "..");
+}
+
+static void String_DNSrcode(master_record_t *r, char *string) {
+	int rcode = r->DNS_flagsCodes & 0x0F;
+	char *name = dns_params.rcodes[rcode];
+	if ( name != NULL )
+		snprintf(string, MAX_STRING_LENGTH-1, "%-8s",
+			 name);
+	else
+		snprintf(string, MAX_STRING_LENGTH-1, "%-8u",
+			 rcode);
+}
+
+static void String_DNSqCount(master_record_t *r, char *string) {
+	snprintf(string, MAX_STRING_LENGTH-1, "%-3d   ", r->DNS_qCount);
+}
+
+static void String_DNSaCount(master_record_t *r, char *string) {
+	snprintf(string, MAX_STRING_LENGTH-1, "%-3d   ", r->DNS_aCount);
+}
+
+static void String_DNSqName(master_record_t *r, char *string) {
+	snprintf(string, MAX_STRING_LENGTH-1, "%-32s",
+		 decode_dnsName(r->DNS_qName, sizeof(r->DNS_qName)));
+}
+
+static void String_DNSqType(master_record_t *r, char *string) {
+	DNS_type(string, r->DNS_qType);
+}
+
+static void String_DNSqClass(master_record_t *r, char *string) {
+	DNS_class(string, r->DNS_qClass);
+}
+
+static void String_DNSaName(master_record_t *r, char *string) {
+	snprintf(string, MAX_STRING_LENGTH-1, "%-32s",
+		 decode_dnsName(r->DNS_aName, sizeof(r->DNS_aName)));
+}
+
+static void String_DNSaType(master_record_t *r, char *string) {
+	DNS_type(string, r->DNS_aType);
+}
+
+static void String_DNSaClass(master_record_t *r, char *string) {
+	DNS_class(string, r->DNS_aClass);
+}
+
+static void String_DNSaTtl(master_record_t *r, char *string) {
+	snprintf(string, MAX_STRING_LENGTH-1, "%-6d", r->DNS_aTtl);
+}
+
+static void String_DNSaRdata(master_record_t *r, char *string) {
+        snprintf(string, MAX_STRING_LENGTH-1, "%-32s",
+                 decode_dnsRdata(r->DNS_aRdata, sizeof(r->DNS_aRdata),
+                                 r->DNS_aType, r->DNS_aRdataLen));
+}
+
+static void String_DNSaRdataLen(master_record_t *r, char *string) {
+	snprintf(string, MAX_STRING_LENGTH-1, "%-6d", r->DNS_aRdataLen);
 }
 
 #ifdef NSEL

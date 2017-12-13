@@ -1204,6 +1204,45 @@ typedef struct tpl_ext_50_s {
 	uint8_t     data[4];    // points to further data
 } tpl_ext_50_t;
 
+/*
+ * Proprietary DNS extension
+ * +----+--------------+--------------+--------------+--------------+--------------+--------------+--------------+--------------+
+ * |  0 |   dnsFlagsCodes (2946:100   | dnsQuestionCount (2946:101) |  dnsAnswerCount (2946:102)  | dnsQuestionType (2946:104)  |
+ * +----+--------------+--------------+--------------+--------------+--------------+--------------+--------------+--------------+
+ * |  1 | dnsQuestionClass (2946:105) |   dnsAnswerType (2946:107)  |  dnsAnswerClass (2946:108)  | dnsAnswerRdataLen (2946:111)| 
+ * +----+--------------+--------------+--------------+--------------+--------------+--------------+--------------+--------------+
+ * |  2 |                                           dnsQuestionName (2946:103)                                                  |
+ * +----+--------------+--------------+--------------+--------------+--------------+--------------+--------------+--------------+
+ * | .. |                                                                                                                       |
+ * +----+--------------+--------------+--------------+--------------+--------------+--------------+--------------+--------------+
+ * | 10 |                                           dnsAnswerName (2946:106)                                                    |
+ * +----+--------------+--------------+--------------+--------------+--------------+--------------+--------------+--------------+
+ * | .. |                                                                                                                       |
+ * +----+--------------+--------------+--------------+--------------+--------------+--------------+--------------+--------------+
+ * | 18 |                                           dnsAnswerRdata (2946:110)                                                   |
+ * +----+--------------+--------------+--------------+--------------+--------------+--------------+--------------+--------------+
+ * | .. |                                                                                                                       |
+ * +----+--------------+--------------+--------------+--------------+--------------+--------------+--------------+--------------+
+ * | 26 |                dnsAnswerTtl (2946:109)                    |
+ * +----+--------------+--------------+--------------+--------------+
+ */
+#define EX_SWITCH_DNS	51
+typedef struct tpl_ext_51_s {
+	uint16_t flagsCodes;
+	uint16_t qCount;
+	uint16_t aCount;
+	uint16_t qType;
+	uint16_t qClass;
+	uint16_t aType;
+	uint16_t aClass;
+	uint16_t aRdataLen;
+	uint8_t  qName[64];
+	uint8_t  aName[64];
+	uint8_t  aRdata[64];
+	uint32_t aTtl;
+	uint8_t     data[4];    // points to further data
+} tpl_ext_51_t;
+
 /* 
  * 
  * 
@@ -2094,6 +2133,80 @@ typedef struct master_record_s {
 #define OffsetHTTPmethod HTTP_BASE_OFFSET
 #define OffsetHTTPhost   HTTP_BASE_OFFSET + 1
 #define OffsetHTTPtarget HTTP_BASE_OFFSET + 5
+
+	// extension 34
+	uint16_t DNS_flagsCodes;
+	uint16_t DNS_qCount;
+	uint16_t DNS_aCount;
+	uint16_t DNS_qType;
+	uint16_t DNS_qClass;
+	uint16_t DNS_aType;
+	uint16_t DNS_aClass;
+	uint16_t DNS_aRdataLen;
+#define LengthDNSqName      64
+	char     DNS_qName[LengthDNSqName];
+#define LengthDNSaName      64
+	char     DNS_aName[LengthDNSaName];
+#define LengthDNSaRdata     64
+	char     DNS_aRdata[LengthDNSaRdata];
+	uint32_t DNS_aTtl;
+
+#define DNS_BASE_OFFSET (offsetof(master_record_t, DNS_flagsCodes) >> 3)
+#define OffsetDNSflagsCodes DNS_BASE_OFFSET
+#define OffsetDNSqCount     DNS_BASE_OFFSET
+#define OffsetDNSaCount     DNS_BASE_OFFSET
+#define OffsetDNSqType      DNS_BASE_OFFSET
+#define OffsetDNSqClass     DNS_BASE_OFFSET + 1
+#define OffsetDNSaType      DNS_BASE_OFFSET + 1
+#define OffsetDNSaClass     DNS_BASE_OFFSET + 1
+#define OffsetDNSaRdataLen  DNS_BASE_OFFSET + 1
+#define OffsetDNSqName      DNS_BASE_OFFSET + 2
+#define OffsetDNSaName      DNS_BASE_OFFSET + 10
+#define OffsetDNSaRdata     DNS_BASE_OFFSET + 18
+#define OffsetDNSaTtl       DNS_BASE_OFFSET + 26
+#ifdef WORDS_BIGENDIAN
+#	define MaskDNSflagsCodes  0xFFFF000000000000LL
+#	define ShiftDNSflagsCodes 48
+#	define MaskDNSqCount      0x0000FFFF00000000LL
+#	define ShiftDNSqCount     32
+#	define MaskDNSaCount      0x00000000FFFF0000LL
+#	define ShiftDNSaCount     16
+#	define MaskDNSqType       0x000000000000FFFFLL
+#	define ShiftDNSqType      0
+
+#	define MaskDNSqClass      0xFFFF000000000000LL
+#	define ShiftDNSqClass     48
+#	define MaskDNSaType       0x0000FFFF00000000LL
+#	define ShiftDNSaType      32
+#	define MaskDNSaClass      0x00000000FFFF0000LL
+#	define ShiftDNSaClass     16
+#	define MaskDNSaRdataLen   0x000000000000FFFFLL
+#	define ShiftDNSqRdataLen  0
+
+#	define MaskDNSaTtl        0xFFFF000000000000LL
+#	define ShiftDNSaTtl       48
+#else
+#	define MaskDNSflagsCodes  0x000000000000FFFFLL
+#	define ShiftDNSflagsCodes 0
+#	define MaskDNSqCount      0x00000000FFFF0000LL
+#	define ShiftDNSqCount     16
+#	define MaskDNSaCount      0x0000FFFF00000000LL
+#	define ShiftDNSaCount     32
+#	define MaskDNSqType       0xFFFF000000000000LL
+#	define ShiftDNSqType      48
+
+#	define MaskDNSqClass      0x000000000000FFFFLL
+#	define ShiftDNSqClass     0
+#	define MaskDNSaType       0x00000000FFFF0000LL
+#	define ShiftDNSaType      16
+#	define MaskDNSaClass      0x0000FFFF00000000LL
+#	define ShiftDNSaClass     32
+#	define MaskDNSaRdataLen   0xFFFF000000000000LL
+#	define ShiftDNSqRdataLen  48
+
+#	define MaskDNSaTtl        0x000000000000FFFFLL
+#	define ShiftDNSaTtl       0
+#endif
 
 /* possible user extensions may fit here
  * - Put each extension into its own #ifdef
