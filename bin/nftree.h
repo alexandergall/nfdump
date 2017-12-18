@@ -77,7 +77,7 @@ typedef struct FilterEngine_data_s {
 /* 
  * Definitions
  */
-enum { CMP_EQ = 0, CMP_GT, CMP_LT, CMP_IDENT, CMP_FLAGS, CMP_IPLIST, CMP_ULLIST };
+enum { CMP_EQ = 0, CMP_GT, CMP_LT, CMP_IDENT, CMP_FLAGS, CMP_IPLIST, CMP_ULLIST, CMP_REGEX };
 
 /*
  * filter functions:

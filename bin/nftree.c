@@ -43,6 +43,7 @@
 #include <sys/types.h>
 #include <string.h>
 #include <errno.h>
+#include <regex.h>
 
 #ifdef HAVE_STDINT_H
 #include <stdint.h>
@@ -492,7 +493,28 @@ int	evaluate, invert;
 				find.value = comp_value[0];
 				evaluate = RB_FIND(ULongtree, args->filter[index].data, &find ) != NULL; }
 				break;
-		}
+			case CMP_REGEX: {
+				// The string to be searched must
+				// start at &args->nfrecord[offset]
+				// and be null-terminated. data must
+				// be a pointer to a compiled regex.
+				// If a function is provided, it must
+				// place a pointer to a string in
+				// comp_value[0] which is searched
+				// instead.  This can be used to apply
+				// formatting to the data before
+				// applying the regular expression.
+				char *string = (char *)&args->nfrecord[offset];
+				if ( args->filter[index].function != NULL )
+					string = (char *)comp_value[0];
+                                if ( (regexec((regex_t *)args->filter[index].data, string,
+                                              0, NULL, 0)) == 0 )
+                                  evaluate = 1;
+                                else
+                                  evaluate = 0;
+                                break;
+                        }
+	}
 
 		index = evaluate ? args->filter[index].OnTrue : args->filter[index].OnFalse;
 	}
