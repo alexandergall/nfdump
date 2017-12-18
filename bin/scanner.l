@@ -211,6 +211,12 @@ not|"!"			{ return NOT; }
 					yylval.s = strdup(yytext);
 					return STRING; 
 				}
+\"(\\.|[^"\\])*\" {
+					char *string = strdup(yytext);
+					string[strlen(string)-1] = '\0';
+					yylval.s = string+1;
+					return QUOTED_STRING;
+				}
 \n				{ lineno++; }
 .				{ return yytext[0]; }
 			
